@@ -54,7 +54,7 @@
         try {
             // 直接撈取最新累加票數
             const { data, error } = await _supabase
-                .from('rt_votes')
+                .from('Votes')
                 .select('*')
                 .order('id', { ascending: true });
 
