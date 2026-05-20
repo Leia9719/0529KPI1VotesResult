@@ -3,147 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>新版放射治療摘要報告基本項目投票結果統計</title>
+    <title>MoSCoW 實時動態統計後台 (Supabase 版)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body { font-family: system-ui, sans-serif; background-color: #f4f6f9; padding: 30px; margin: 0; color: #333; }
         .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        h1 { text-align: center; color: #2b579a; margin-bottom: 5px; font-weight: 800; }
-        .subtitle { text-align: center; color: #666; font-size: 16px; margin-top: 15px; margin-bottom: 20px; padding-bottom: 18px; border-bottom: 4px dashed #eee; }
+        h1 { text-align: center; color: #2b579a; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 30px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 15px; }
         th, td { border: 1px solid #ddd; padding: 12px 15px; text-align: center; }
         th { background-color: #2b579a; color: white; font-weight: 600; }
         tr:nth-child(even) { background-color: #f9f9f9; }
-        tr:hover { background-color: #f1f5f9; }
         .badge { padding: 6px 12px; border-radius: 20px; font-weight: bold; font-size: 13px; display: inline-block; }
         .badge-approve { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #4caf50; }
         .badge-reject { background-color: #ffebee; color: #c62828; border: 1px solid #f44336; }
         .badge-neutral { background-color: #fff3e0; color: #ef6c00; border: 1px solid #ff9800; }
         .badge-none { background-color: #eee; color: #777; }
-        .loading { text-align: center; font-size: 18px; color: #888; padding: 50px 0; }
+        .refresh-tag { float: right; font-size: 12px; color: #2e7d32; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>2026年版放射治療摘要報告基本項目投票結果統計</h1>
-    <div class="subtitle">計算每一題之最高決議票數</div>
+    <h1>MoSCoW 實時決策統計大盤 <span class="refresh-tag">● 每 5 秒自動重新整理</span></h1>
+    <div class="subtitle">本頁面直接對接 Supabase 資料庫，即時顯示 150 題之最新最高票結果</div>
     
-    <div id="loadingStatus" class="loading">正在讀取並解析投票數據，請稍候...</div>
-    
-    <table id="resultTable" style="display: none; padding-top: 25px; margin-top: 20px;">
+    <table>
         <thead>
             <tr>
                 <th style="width: 8%;">題號</th>
-                <th style="text-align: left; width: 42%;">題目內容</th>
+                <th style="text-align: left; width: 42%;">項目名稱</th>
                 <th style="width: 12%;">贊成票</th>
                 <th style="width: 12%;">反對票</th>
                 <th style="width: 12%;">棄權票</th>
-                <th style="width: 14%;">最終決議最高票</th>
+                <th style="width: 14%;">當前最高票決議</th>
             </tr>
         </thead>
         <tbody id="tableBody">
-            </tbody>
+            <tr><td colspan="6" style="text-align:center; color:#999;">正在串接資料庫數據...</td></tr>
+        </tbody>
     </table>
 </div>
 
 <script>
+    const SUPABASE_URL = 'https://sb_publishable_4Tw5HDpKs5_khPS3hDDtQA_HTc29KlM.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sYWNsaWhobnpwamJsa3R5eGdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNDA2NDksImV4cCI6MjA5NDgxNjY0OX0.Xx42I4OpZG_7_kQAoOjLar1iFGbNIoT5omgwVnPOEcQ';
+    const _supabase = @supabase/supabase-js.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTGzF9pj3eAwk_RmgQYvsoRzehegqwM9Hhjk2B9cuPzgQBrIYX2y9DU67SLh29l7bRWu-JfzNT8NtTr/pub?output=csv';
-
-    // CSV 解析簡易函式（處理包含雙引號的欄位）
-    function parseCSV(text) {
-        let lines = text.split(/\r\n|\n/);
-        let result = [];
-        for (let i = 1; i < lines.length; i++) {
-            if (!lines[i]) continue;
-            // 尋找第一個逗號（時間戳記與內容的分隔點）
-            let firstComma = lines[i].indexOf(',');
-            if (firstComma === -1) continue;
-            
-            let jsonPart = lines[i].substring(firstComma + 1);
-            // 去除 Google CSV 匯出時包裹在最外層的雙引號，並把重複的雙引號還原
-            if (jsonPart.startsWith('"') && jsonPart.endsWith('"')) {
-                jsonPart = jsonPart.substring(1, jsonPart.length - 1);
-            }
-            jsonPart = jsonPart.replace(/""/g, '"');
-            result.push(jsonPart);
-        }
-        return result;
-    }
-
-    async function calculateVotes() {
+    async function fetchRealtimeStats() {
         try {
-            const response = await fetch(CSV_URL);
-            const csvText = await response.text();
-            const jsonRows = parseCSV(csvText);
+            // 直接撈取最新累加票數
+            const { data, error } = await _supabase
+                .from('rt_votes')
+                .select('*')
+                .order('id', { ascending: true });
 
-            let stats = {};
+            if (error) throw error;
 
-            // 遍歷每個人投出來的整串 JSON 紀錄
-            jsonRows.forEach(rowText => {
-                try {
-                    const rowData = JSON.parse(rowText);
-                    for (let question in rowData) {
-                        if (!stats[question]) {
-                            stats[question] = { "贊成": 0, "反對": 0, "棄權": 0 };
-                        }
-                        const choice = rowData[question];
-                        if (stats[question].hasOwnProperty(choice)) {
-                            stats[question][choice]++;
-                        }
-                    }
-                } catch (e) {
-                    console.error("解析單列 JSON 失敗: ", rowText, e);
-                }
-            });
-
-            // 渲染到前端 HTML 表格中
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
-            
-            let index = 1;
-            for (let question in stats) {
-                const vApprove = stats[question]["贊成"];
-                const vReject = stats[question]["反對"];
-                const vNeutral = stats[question]["棄權"];
-                
-                // 判斷最高票
+
+            data.forEach((row, index) => {
+                const app = row.approve_count || 0;
+                const rej = row.reject_count || 0;
+                const neu = row.neutral_count || 0;
+
                 let maxText = "尚無投票";
                 let maxClass = "badge-none";
-                
-                if (vApprove > 0 || vReject > 0 || vNeutral > 0) {
-                    if (vApprove >= vReject && vApprove >= vNeutral) {
-                        maxText = "贊成"; maxClass = "badge-approve";
-                    } else if (vReject >= vApprove && vReject >= vNeutral) {
-                        maxText = "反對"; maxClass = "badge-reject";
-                    } else {
-                        maxText = "棄權"; maxClass = "badge-neutral";
-                    }
+
+                if (app > 0 || rej > 0 || neu > 0) {
+                    if (app >= rej && app >= neu) { maxText = "贊成"; maxClass = "badge-approve"; }
+                    else if (rej >= app && rej >= neu) { maxText = "反對"; maxClass = "badge-reject"; }
+                    else { maxText = "棄權"; maxClass = "badge-neutral"; }
                 }
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${index++}</td>
-                    <td style="text-align: left; font-weight: 500;">${question}</td>
-                    <td style="color: #2e7d32; font-weight: bold;">${vApprove}</td>
-                    <td style="color: #c62828; font-weight: bold;">${vReject}</td>
-                    <td style="color: #ef6c00; font-weight: bold;">${vNeutral}</td>
+                    <td>${index + 1}</td>
+                    <td style="text-align: left; font-weight: 500;">${row.question_text}</td>
+                    <td style="color: #2e7d32; font-weight: bold;">${app}</td>
+                    <td style="color: #c62828; font-weight: bold;">${rej}</td>
+                    <td style="color: #ef6c00; font-weight: bold;">${neu}</td>
                     <td><span class="badge ${maxClass}">${maxText}</span></td>
                 `;
                 tbody.appendChild(tr);
-            }
-
-            document.getElementById('loadingStatus').style.display = 'none';
-            document.getElementById('resultTable').style.display = 'table';
-
-        } catch (error) {
-            console.error(error);
-            document.getElementById('loadingStatus').innerHTML = '<span style="color:red;">讀取統計失敗，請確認試算表已正確「發布到網路(CSV)」。</span>';
+            });
+        } catch (err) {
+            console.error("更新大盤失敗:", err);
         }
     }
 
-    calculateVotes();
+    // 初始化讀取，並設定每 5 秒鐘自動重抓一次
+    fetchRealtimeStats();
+    setInterval(fetchRealtimeStats, 5000);
 </script>
-
 </body>
 </html>
